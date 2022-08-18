@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct SessionState(HashMap<String, String>);
 
 impl SessionState {
