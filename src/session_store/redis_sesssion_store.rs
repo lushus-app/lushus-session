@@ -132,7 +132,7 @@ impl SessionStore for RedisSessionStore {
     async fn exists(&self, session_key: &SessionKey) -> Result<bool, Self::Error> {
         let cache_key = (&self.config.key_gen)(&session_key);
         let exists = self
-            .execute_command::<u64>(Command::delete(cache_key))
+            .execute_command::<u64>(Command::exists(cache_key))
             .await
             .map_err(StoreError::from)?;
         Ok(exists > 0)
@@ -187,7 +187,7 @@ mod tests {
 
         let timeout = Duration::new(1, 0);
         let user_id_1 = "beavis".to_string();
-        let user_id_2 = "butthead".to_string();
+        let user_id_2 = "butt-head".to_string();
 
         let mut session = Session::default();
         session

@@ -1,4 +1,5 @@
 mod session;
+mod session_model;
 mod session_state;
 mod session_store;
 mod storage;
