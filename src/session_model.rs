@@ -1,8 +1,10 @@
-use crate::storage::{Storage, StorageError};
-use crate::{Session, SessionKey, SessionStore};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use std::time::Duration;
+
+use crate::{
+    storage::{Storage, StorageError},
+    Session, SessionKey, SessionStore,
+};
 
 struct SessionModel<Store: SessionStore> {
     store: Store,
