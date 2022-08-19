@@ -6,19 +6,33 @@ use crate::{
     Session, SessionKey, SessionStore,
 };
 
-struct SessionModel<Store: SessionStore> {
+pub struct SessionModel<Store: SessionStore> {
     store: Store,
     session: Session,
     duration: Duration,
 }
 
 impl<Store: SessionStore> SessionModel<Store> {
-    pub fn new(store: Store, session: Session, duration: Duration) -> Self {
+    pub fn new(store: Store, duration: Duration) -> Self {
         Self {
+            store,
+            duration,
+            session: Default::default(),
+        }
+    }
+
+    pub async fn load(
+        store: Store,
+        id: &SessionKey,
+        duration: Duration,
+    ) -> Result<Option<Self>, Store::Error> {
+        let session = store.load(id).await?;
+        let model = session.map(|session| Self {
             store,
             session,
             duration,
-        }
+        });
+        Ok(model)
     }
 
     pub fn id(&self) -> &SessionKey {
@@ -58,6 +72,12 @@ impl<Store: SessionStore> Storage<&str> for SessionModel<Store> {
     }
 }
 
+impl<Store: SessionStore> From<SessionModel<Store>> for Session {
+    fn from(model: SessionModel<Store>) -> Self {
+        model.session
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,16 +88,15 @@ mod tests {
         let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
             .await
             .expect("Unable to connect to Redis");
-        let mut session = Session::default();
-        session
+        let timeout = Duration::from_secs(1);
+        let mut model = SessionModel::new(&store, timeout);
+        model
             .insert("user_id", &"abc-123".to_string())
             .expect("Unable to insert user_id");
-        let timeout = Duration::from_secs(1);
-        let session_model = SessionModel::new(&store, session, timeout);
-        session_model.save().await.expect("Unable to save session");
+        model.save().await.expect("Unable to save session");
 
         let loaded_session = store
-            .load(session_model.id())
+            .load(model.id())
             .await
             .expect("Unable to load session")
             .expect("Unable to find saved session");
@@ -93,17 +112,16 @@ mod tests {
         let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
             .await
             .expect("Unable to connect to Redis");
-        let session = Session::default();
         let timeout = Duration::from_secs(10);
-        let mut session_model = SessionModel::new(&store, session, timeout);
+        let mut model = SessionModel::new(&store, timeout);
 
-        session_model
+        model
             .insert("user_id", &"beavis".to_string())
             .expect("Unable to insert user_id");
-        session_model.save().await.expect("Unable to save session");
+        model.save().await.expect("Unable to save session");
 
         let loaded_session = store
-            .load(session_model.id())
+            .load(model.id())
             .await
             .expect("Unable to load session")
             .expect("Unable to find saved session");
@@ -113,13 +131,13 @@ mod tests {
             .expect("Unable to find user_id in loaded session");
         assert_eq!(&loaded_user_id, "beavis");
 
-        session_model
+        model
             .insert("user_id", &"butt-head".to_string())
             .expect("Unable to insert user_id");
-        session_model.save().await.expect("Unable to save session");
+        model.save().await.expect("Unable to save session");
 
         let loaded_session = store
-            .load(session_model.id())
+            .load(model.id())
             .await
             .expect("Unable to load session")
             .expect("Unable to find saved session");
@@ -131,29 +149,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn destroy_deletes_the_session_to_the_store() {
+    async fn load_creates_a_model_from_existing_session_in_the_store() {
         let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
             .await
             .expect("Unable to connect to Redis");
         let mut session = Session::default();
         session
+            .insert("user_id", &"beavis".to_string())
+            .expect("Unable to insert user_id");
+        let timeout = Duration::from_secs(10);
+        store
+            .save(&session, timeout)
+            .await
+            .expect("Unable to save session");
+
+        let model = SessionModel::load(&store, session.id(), timeout)
+            .await
+            .expect("Unable to load session")
+            .expect("Unable to find saved session");
+        let user_id = model
+            .get::<String>("user_id")
+            .expect("Unable to get from loaded session")
+            .expect("Unable to find user_id in loaded session");
+        assert_eq!(&user_id, "beavis");
+    }
+
+    #[tokio::test]
+    async fn destroy_deletes_the_session_to_the_store() {
+        let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
+            .await
+            .expect("Unable to connect to Redis");
+        let timeout = Duration::from_secs(1);
+        let mut model = SessionModel::new(&store, timeout);
+        model
             .insert("user_id", &"abc-123".to_string())
             .expect("Unable to insert user_id");
-        let timeout = Duration::from_secs(1);
-        let session_model = SessionModel::new(&store, session, timeout);
-
-        session_model.save().await.expect("Unable to save session");
+        model.save().await.expect("Unable to save session");
         let exists = store
-            .exists(session_model.id())
+            .exists(model.id())
             .await
             .expect("Unable to check exists");
         assert!(exists);
-        session_model
-            .destroy()
-            .await
-            .expect("Unable to destroy session");
+
+        model.destroy().await.expect("Unable to destroy session");
         let exists = store
-            .exists(session_model.id())
+            .exists(model.id())
             .await
             .expect("Unable to check exists");
         assert!(!exists);
