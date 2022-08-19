@@ -15,6 +15,9 @@ pub enum Command {
         value: String,
         ttl: Duration,
     },
+    TTL {
+        key: String,
+    },
     Update {
         key: String,
         value: String,
@@ -34,6 +37,9 @@ impl Command {
     }
     pub fn set(key: String, value: String, ttl: Duration) -> Self {
         Self::Set { key, value, ttl }
+    }
+    pub fn ttl(key: String) -> Self {
+        Self::TTL { key }
     }
     pub fn update(key: String, value: String, ttl: Duration) -> Self {
         Self::Update { key, value, ttl }
@@ -55,6 +61,7 @@ impl From<Command> for redis::Cmd {
                     format!("{}", ttl.as_secs()).as_ref(),
                 ])
                 .clone(),
+            Command::TTL { key } => redis::cmd("TTL").arg(&[&key]).clone(),
             Command::Update { key, value, ttl } => redis::cmd("SET")
                 .arg(&[
                     &key,

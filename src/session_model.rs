@@ -21,12 +21,9 @@ impl<Store: SessionStore> SessionModel<Store> {
         }
     }
 
-    pub async fn load(
-        store: Store,
-        id: &SessionKey,
-        duration: Duration,
-    ) -> Result<Option<Self>, Store::Error> {
+    pub async fn load(store: Store, id: &SessionKey) -> Result<Option<Self>, Store::Error> {
         let session = store.load(id).await?;
+        let duration = store.ttl(id).await?;
         let model = session.map(|session| Self {
             store,
             session,
@@ -163,7 +160,7 @@ mod tests {
             .await
             .expect("Unable to save session");
 
-        let model = SessionModel::load(&store, session.id(), timeout)
+        let model = SessionModel::load(&store, session.id())
             .await
             .expect("Unable to load session")
             .expect("Unable to find saved session");

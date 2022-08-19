@@ -137,6 +137,15 @@ impl SessionStore for RedisSessionStore {
             .map_err(StoreError::from)?;
         Ok(exists > 0)
     }
+
+    async fn ttl(&self, session_key: &SessionKey) -> Result<Duration, Self::Error> {
+        let cache_key = (&self.config.key_gen)(&session_key);
+        let ttl = self
+            .execute_command::<u64>(Command::ttl(cache_key))
+            .await
+            .map_err(StoreError::from)?;
+        Ok(Duration::from_secs(ttl))
+    }
 }
 
 #[cfg(test)]

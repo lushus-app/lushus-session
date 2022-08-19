@@ -11,6 +11,7 @@ pub trait SessionStore {
     async fn update(&self, session: &Session, timeout: Duration) -> Result<(), Self::Error>;
     async fn destroy(&self, session_key: &SessionKey) -> Result<(), Self::Error>;
     async fn exists(&self, session_key: &SessionKey) -> Result<bool, Self::Error>;
+    async fn ttl(&self, session_key: &SessionKey) -> Result<Duration, Self::Error>;
 }
 
 #[async_trait::async_trait(?Send)]
@@ -38,5 +39,9 @@ where
 
     async fn exists(&self, session_key: &SessionKey) -> Result<bool, Self::Error> {
         <S as SessionStore>::exists(self, session_key).await
+    }
+
+    async fn ttl(&self, session_key: &SessionKey) -> Result<Duration, Self::Error> {
+        <S as SessionStore>::ttl(self, session_key).await
     }
 }
