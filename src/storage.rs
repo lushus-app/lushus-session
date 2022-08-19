@@ -34,5 +34,4 @@ pub trait Storage<K> {
     fn insert<T: Serialize>(&mut self, key: K, value: &T) -> Result<(), Self::Error>;
     fn remove<T: DeserializeOwned>(&mut self, key: K) -> Result<Option<T>, Self::Error>;
     fn get<T: DeserializeOwned>(&self, key: K) -> Result<Option<T>, Self::Error>;
-    fn contains_key(&self, key: K) -> Result<bool, Self::Error>;
 }

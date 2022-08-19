@@ -16,8 +16,4 @@ impl SessionState {
     pub fn get(&self, key: &str) -> Option<&String> {
         self.0.get(key)
     }
-
-    pub fn contains_key(&self, key: &str) -> bool {
-        self.0.contains_key(key)
-    }
 }

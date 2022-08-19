@@ -2,6 +2,7 @@ use redis::aio::ConnectionManager;
 use std::time::Duration;
 
 use crate::backend::{Backend, SessionKey};
+use crate::session::Session;
 use crate::session_state::SessionState;
 
 struct Configuration {
@@ -69,44 +70,33 @@ impl RedisSessionStore {
 impl Backend for RedisSessionStore {
     type Error = StorageError;
 
-    async fn load(&self, session_key: SessionKey) -> Result<Option<SessionState>, Self::Error> {
-        let key_gen = &self.config.key_gen;
-        let cache_key = key_gen(&session_key);
-        let mut cmd = redis::cmd("GET").arg(&[&cache_key]).clone();
-
+    async fn load(&self, session_key: SessionKey) -> Result<Option<Session>, Self::Error> {
+        let cache_key = (&self.config.key_gen)(&session_key);
         let value = self
-            .execute_command::<Option<String>>(&mut cmd)
+            .execute_command::<Option<String>>(redis::cmd("GET").arg(&[&cache_key]))
             .await
             .map_err(StorageError::from)?;
         value
-            .map(|v| serde_json::from_str(&v))
+            .map(|v| serde_json::from_str::<SessionState>(&v))
             .transpose()
+            .map(|s| s.map(Session::from))
             .map_err(StorageError::SerializationError)
     }
 
-    async fn save(
-        &self,
-        session_state: SessionState,
-        timeout: Duration,
-    ) -> Result<SessionKey, Self::Error> {
+    async fn save(&self, session: Session, timeout: Duration) -> Result<SessionKey, Self::Error> {
         let session_key = SessionKey::generate();
-        let key_gen = &self.config.key_gen;
-        let cache_key = key_gen(&session_key);
-        let body =
-            serde_json::to_string(&session_state).map_err(StorageError::SerializationError)?;
-        let mut cmd = redis::cmd("SET")
-            .arg(&[
-                &cache_key,
-                &body,
-                "NX",
-                "EX",
-                &format!("{}", timeout.as_secs()),
-            ])
-            .clone();
-
-        self.execute_command(&mut cmd)
-            .await
-            .map_err(StorageError::from)?;
+        let cache_key = (&self.config.key_gen)(&session_key);
+        let state: SessionState = session.into();
+        let body = serde_json::to_string(&state).map_err(StorageError::SerializationError)?;
+        self.execute_command(redis::cmd("SET").arg(&[
+            &cache_key,
+            &body,
+            "NX",
+            "EX",
+            &format!("{}", timeout.as_secs()),
+        ]))
+        .await
+        .map_err(StorageError::from)?;
 
         Ok(session_key)
     }
@@ -114,25 +104,20 @@ impl Backend for RedisSessionStore {
     async fn update(
         &self,
         session_key: SessionKey,
-        session_state: SessionState,
+        session: Session,
         timeout: Duration,
     ) -> Result<(), Self::Error> {
-        let key_gen = &self.config.key_gen;
-        let cache_key = key_gen(&session_key);
-        let body =
-            serde_json::to_string(&session_state).map_err(StorageError::SerializationError)?;
-        let mut cmd = redis::cmd("SET")
-            .arg(&[
+        let cache_key = (&self.config.key_gen)(&session_key);
+        let state: SessionState = session.into();
+        let body = serde_json::to_string(&state).map_err(StorageError::SerializationError)?;
+        let value = self
+            .execute_command(redis::cmd("SET").arg(&[
                 &cache_key,
                 &body,
                 "XX",
                 "EX",
                 &format!("{}", timeout.as_secs()),
-            ])
-            .clone();
-
-        let value = self
-            .execute_command(&mut cmd)
+            ]))
             .await
             .map(redis::Value::from)
             .map_err(StorageError::from)?;
@@ -149,11 +134,8 @@ impl Backend for RedisSessionStore {
     }
 
     async fn delete(&self, session_key: SessionKey) -> Result<(), Self::Error> {
-        let key_gen = &self.config.key_gen;
-        let cache_key = key_gen(&session_key);
-        let mut cmd = redis::cmd("DEL").arg(&[&cache_key]).clone();
-
-        self.execute_command(&mut cmd)
+        let cache_key = (&self.config.key_gen)(&session_key);
+        self.execute_command(redis::cmd("DEL").arg(&[&cache_key]))
             .await
             .map_err(StorageError::from)
     }
@@ -162,11 +144,39 @@ impl Backend for RedisSessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session::Session;
 
     #[tokio::test]
     async fn test_it() {
         RedisSessionStore::new("redis://localhost:6379")
             .await
-            .unwrap();
+            .expect("Unable to connect to Redis");
+    }
+
+    #[tokio::test]
+    async fn load_returns_the_session_for_the_given_key() {
+        let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
+            .await
+            .expect("Unable to connect to Redis");
+
+        let user_id = "abc-123".to_string();
+
+        let mut session = Session::default();
+        session
+            .insert("user_id", &user_id)
+            .expect("Unable to insert user id");
+
+        let session_key = store
+            .save(session.into(), Duration::new(1, 0))
+            .await
+            .expect("Unable to save session");
+
+        let loaded_session = store.load(session_key).await.unwrap().unwrap();
+        let loaded_user_id = loaded_session
+            .get::<String>("user_id")
+            .expect("Unable to get user id")
+            .expect("User id not found");
+
+        assert_eq!(loaded_user_id, user_id);
     }
 }
