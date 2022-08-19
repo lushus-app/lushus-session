@@ -128,6 +128,15 @@ impl SessionStore for RedisSessionStore {
             .await
             .map_err(StoreError::from)
     }
+
+    async fn exists(&self, session_key: &SessionKey) -> Result<bool, Self::Error> {
+        let cache_key = (&self.config.key_gen)(&session_key);
+        let exists = self
+            .execute_command::<u64>(Command::delete(cache_key))
+            .await
+            .map_err(StoreError::from)?;
+        Ok(exists > 0)
+    }
 }
 
 #[cfg(test)]
@@ -208,5 +217,36 @@ mod tests {
             .expect("Unable to get user id")
             .expect("User id not found");
         assert_eq!(loaded_user_id, user_id_2);
+    }
+
+    #[tokio::test]
+    async fn exists_returns_true_if_the_given_session_key_is_stored() {
+        let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
+            .await
+            .expect("Unable to connect to Redis");
+        let timeout = Duration::new(1, 0);
+        let session = Session::default();
+        store
+            .save(&session, timeout)
+            .await
+            .expect("Unable to save session");
+        let exists = store
+            .exists(session.id())
+            .await
+            .expect("Unable to check exists");
+        assert!(exists)
+    }
+
+    #[tokio::test]
+    async fn exists_returns_false_if_the_given_session_key_is_not_stored() {
+        let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
+            .await
+            .expect("Unable to connect to Redis");
+        let session = Session::default();
+        let exists = store
+            .exists(session.id())
+            .await
+            .expect("Unable to check exists");
+        assert!(!exists)
     }
 }

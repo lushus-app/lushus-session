@@ -10,4 +10,5 @@ pub trait SessionStore {
     async fn save(&self, session: &Session, timeout: Duration) -> Result<(), Self::Error>;
     async fn update(&self, session: &Session, timeout: Duration) -> Result<(), Self::Error>;
     async fn destroy(&self, session_key: &SessionKey) -> Result<(), Self::Error>;
+    async fn exists(&self, session_key: &SessionKey) -> Result<bool, Self::Error>;
 }

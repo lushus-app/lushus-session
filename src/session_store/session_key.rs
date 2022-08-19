@@ -1,6 +1,6 @@
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SessionKey(String);
 
 impl SessionKey {
