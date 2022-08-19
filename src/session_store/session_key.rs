@@ -1,6 +1,6 @@
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SessionKey(String);
 
 impl SessionKey {
@@ -17,5 +17,11 @@ impl SessionKey {
 impl AsRef<str> for SessionKey {
     fn as_ref(&self) -> &str {
         &self.0
+    }
+}
+
+impl Default for SessionKey {
+    fn default() -> Self {
+        Self::generate()
     }
 }
