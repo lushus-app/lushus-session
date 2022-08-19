@@ -61,8 +61,7 @@ impl<Store: SessionStore> Storage<&str> for SessionModel<Store> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::Storage;
-    use crate::RedisSessionStore;
+    use crate::{storage::Storage, RedisSessionStore};
 
     #[tokio::test]
     async fn save_commits_new_sessions_to_the_store() {

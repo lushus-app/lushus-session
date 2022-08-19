@@ -142,8 +142,7 @@ impl SessionStore for RedisSessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::Session;
-    use crate::storage::Storage;
+    use crate::{session::Session, storage::Storage};
 
     #[tokio::test]
     async fn test_it() {
