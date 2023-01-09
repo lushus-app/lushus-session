@@ -52,6 +52,10 @@ impl<Store: SessionStore> SessionModel<Store> {
         Ok(())
     }
 
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
     pub fn timeout(&self) -> Duration {
         self.duration
     }
