@@ -51,6 +51,10 @@ impl<Store: SessionStore> SessionModel<Store> {
         self.store.destroy(id).await?;
         Ok(())
     }
+
+    pub fn timeout(&self) -> Duration {
+        self.duration
+    }
 }
 
 impl<Store: SessionStore> Storage<&str> for SessionModel<Store> {
