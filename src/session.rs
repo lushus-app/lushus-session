@@ -1,5 +1,6 @@
-use serde::{de::DeserializeOwned, Serialize};
 use std::borrow::{Borrow, BorrowMut};
+
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     session_state::SessionState,
@@ -81,8 +82,9 @@ impl Storage<&str> for Session {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde::{Deserialize, Serialize};
+
+    use super::*;
 
     #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     struct User {

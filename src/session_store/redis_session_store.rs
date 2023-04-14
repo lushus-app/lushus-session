@@ -1,14 +1,15 @@
 mod commands;
 
-use redis::aio::ConnectionManager;
 use std::time::Duration;
+
+use commands::Command;
+use redis::aio::ConnectionManager;
 
 use crate::{
     session::Session,
     session_state::SessionState,
     session_store::{SessionKey, SessionStore},
 };
-use commands::Command;
 
 struct Configuration {
     key_gen: Box<dyn Fn(&SessionKey) -> String + Send + Sync>,

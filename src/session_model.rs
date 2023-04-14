@@ -1,5 +1,6 @@
-use serde::{de::DeserializeOwned, Serialize};
 use std::time::Duration;
+
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     storage::{Storage, StorageError},
