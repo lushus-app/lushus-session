@@ -25,3 +25,5 @@ impl Default for SessionKey {
         Self::generate()
     }
 }
+
+trait GenerateKey {}
