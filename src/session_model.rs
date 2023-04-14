@@ -95,7 +95,7 @@ mod tests {
             .await
             .expect("Unable to connect to Redis");
         let timeout = Duration::from_secs(1);
-        let mut model = SessionModel::new(store.clone(), timeout);
+        let mut model = SessionModel::new(&store, timeout);
         model
             .insert("user_id", &"abc-123".to_string())
             .expect("Unable to insert user_id");
@@ -120,7 +120,7 @@ mod tests {
             .await
             .expect("Unable to connect to Redis");
         let timeout = Duration::from_secs(10);
-        let mut model = SessionModel::new(store.clone(), timeout);
+        let mut model = SessionModel::new(&store, timeout);
 
         model
             .insert("user_id", &"beavis".to_string())
@@ -173,7 +173,7 @@ mod tests {
             .await
             .expect("Unable to save session");
 
-        let model = SessionModel::load(store, session.id())
+        let model = SessionModel::load(&store, session.id())
             .await
             .expect("Unable to load session")
             .expect("Unable to find saved session");
@@ -190,7 +190,7 @@ mod tests {
             .await
             .expect("Unable to connect to Redis");
         let timeout = Duration::from_secs(1);
-        let mut model = SessionModel::new(store.clone(), timeout);
+        let mut model = SessionModel::new(&store, timeout);
         model
             .insert("user_id", &"abc-123".to_string())
             .expect("Unable to insert user_id");
