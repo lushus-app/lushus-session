@@ -9,7 +9,7 @@ impl SessionKey {
             .map(|()| OsRng.sample(Alphanumeric))
             .take(64)
             .collect::<Vec<_>>();
-        let key = String::from_utf8(value).unwrap().try_into().unwrap();
+        let key = String::from_utf8(value).unwrap();
         Self(key)
     }
 }
