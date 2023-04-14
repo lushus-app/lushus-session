@@ -4,17 +4,17 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     storage::{Storage, StorageError},
-    Session, SessionKey, SessionStore,
+    Session, SessionKey, Store,
 };
 
-pub struct SessionModel<Store: SessionStore> {
-    store: Store,
+pub struct SessionModel<S: Store> {
+    store: S,
     session: Session,
     duration: Duration,
 }
 
-impl<Store: SessionStore> SessionModel<Store> {
-    pub fn new(store: Store, duration: Duration) -> Self {
+impl<S: Store> SessionModel<S> {
+    pub fn new(store: S, duration: Duration) -> Self {
         Self {
             store,
             duration,
@@ -22,7 +22,7 @@ impl<Store: SessionStore> SessionModel<Store> {
         }
     }
 
-    pub async fn load(store: Store, id: &SessionKey) -> Result<Option<Self>, Store::Error> {
+    pub async fn load(store: S, id: &SessionKey) -> Result<Option<Self>, S::Error> {
         let session = store.load(id).await?;
         let duration = store.ttl(id).await?;
         let model = session.map(|session| Self {
@@ -37,7 +37,7 @@ impl<Store: SessionStore> SessionModel<Store> {
         self.session.id()
     }
 
-    pub async fn save(&self) -> Result<(), Store::Error> {
+    pub async fn save(&self) -> Result<(), S::Error> {
         let id = self.session.id();
         let exists = self.store.exists(id).await?;
         if exists {
@@ -47,7 +47,7 @@ impl<Store: SessionStore> SessionModel<Store> {
         }
     }
 
-    pub async fn destroy(&self) -> Result<(), Store::Error> {
+    pub async fn destroy(&self) -> Result<(), S::Error> {
         let id = self.session.id();
         self.store.destroy(id).await?;
         Ok(())
@@ -62,7 +62,7 @@ impl<Store: SessionStore> SessionModel<Store> {
     }
 }
 
-impl<Store: SessionStore> Storage<&str> for SessionModel<Store> {
+impl<S: Store> Storage<&str> for SessionModel<S> {
     type Error = StorageError;
 
     fn insert<T: Serialize>(&mut self, key: &str, value: &T) -> Result<(), Self::Error> {
@@ -78,8 +78,8 @@ impl<Store: SessionStore> Storage<&str> for SessionModel<Store> {
     }
 }
 
-impl<Store: SessionStore> From<SessionModel<Store>> for Session {
-    fn from(model: SessionModel<Store>) -> Self {
+impl<S: Store> From<SessionModel<S>> for Session {
+    fn from(model: SessionModel<S>) -> Self {
         model.session
     }
 }
@@ -87,11 +87,11 @@ impl<Store: SessionStore> From<SessionModel<Store>> for Session {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{storage::Storage, RedisSessionStore};
+    use crate::{storage::Storage, RedisDatabase};
 
     #[tokio::test]
     async fn save_commits_new_sessions_to_the_store() {
-        let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
+        let store = RedisDatabase::new("redis://:password@localhost:6379/1")
             .await
             .expect("Unable to connect to Redis");
         let timeout = Duration::from_secs(1);
@@ -102,6 +102,7 @@ mod tests {
         model.save().await.expect("Unable to save session");
 
         let loaded_session = store
+            .as_ref()
             .load(model.id())
             .await
             .expect("Unable to load session")
@@ -115,7 +116,7 @@ mod tests {
 
     #[tokio::test]
     async fn save_updates_existing_session_in_the_store() {
-        let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
+        let store = RedisDatabase::new("redis://:password@localhost:6379/1")
             .await
             .expect("Unable to connect to Redis");
         let timeout = Duration::from_secs(10);
@@ -127,6 +128,7 @@ mod tests {
         model.save().await.expect("Unable to save session");
 
         let loaded_session = store
+            .as_ref()
             .load(model.id())
             .await
             .expect("Unable to load session")
@@ -143,6 +145,7 @@ mod tests {
         model.save().await.expect("Unable to save session");
 
         let loaded_session = store
+            .as_ref()
             .load(model.id())
             .await
             .expect("Unable to load session")
@@ -156,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn load_creates_a_model_from_existing_session_in_the_store() {
-        let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
+        let store = RedisDatabase::new("redis://:password@localhost:6379/1")
             .await
             .expect("Unable to connect to Redis");
         let mut session = Session::default();
@@ -165,6 +168,7 @@ mod tests {
             .expect("Unable to insert user_id");
         let timeout = Duration::from_secs(10);
         store
+            .as_ref()
             .save(&session, timeout)
             .await
             .expect("Unable to save session");
@@ -182,7 +186,7 @@ mod tests {
 
     #[tokio::test]
     async fn destroy_deletes_the_session_to_the_store() {
-        let store = RedisSessionStore::new("redis://:password@localhost:6379/1")
+        let store = RedisDatabase::new("redis://:password@localhost:6379/1")
             .await
             .expect("Unable to connect to Redis");
         let timeout = Duration::from_secs(1);
@@ -192,6 +196,7 @@ mod tests {
             .expect("Unable to insert user_id");
         model.save().await.expect("Unable to save session");
         let exists = store
+            .as_ref()
             .exists(model.id())
             .await
             .expect("Unable to check exists");
@@ -199,6 +204,7 @@ mod tests {
 
         model.destroy().await.expect("Unable to destroy session");
         let exists = store
+            .as_ref()
             .exists(model.id())
             .await
             .expect("Unable to check exists");

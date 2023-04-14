@@ -1,7 +1,6 @@
-mod redis_session_store;
+pub(crate) mod configuration;
 mod session_key;
-mod session_store;
+mod store;
 
-pub use redis_session_store::{RedisSessionStore, StoreError as RedisSessionStoreError};
 pub use session_key::SessionKey;
-pub use session_store::SessionStore;
+pub use store::Store;
