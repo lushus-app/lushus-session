@@ -2,7 +2,7 @@ mod commands;
 mod connect;
 mod error;
 mod execute_command;
-pub mod redis_database;
+mod redis_database;
 
 use std::time::Duration;
 
@@ -10,6 +10,7 @@ use commands::Command;
 use connect::Connect;
 use error::RedisError;
 use execute_command::ExecuteCommand;
+pub use redis_database::RedisDatabase;
 
 use crate::{session::Session, session_state::SessionState, SessionKey, Store};
 
