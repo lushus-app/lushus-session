@@ -1,7 +1,7 @@
 use redis::aio::ConnectionManager;
 
 use crate::{
-    redis_session::{
+    redis_store::{
         commands::Command, connect::Connect, error::RedisError, execute_command::ExecuteCommand,
     },
     session_store::configuration::Configuration,
