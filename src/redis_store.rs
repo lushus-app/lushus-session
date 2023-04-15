@@ -27,7 +27,7 @@ pub enum StoreError {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<T> Store for &T
+impl<T> Store for T
 where
     T: Connect + ExecuteCommand + GenerateKey,
 {
