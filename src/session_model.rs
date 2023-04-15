@@ -7,14 +7,14 @@ use crate::{
     Session, SessionKey, Store,
 };
 
-pub struct SessionModel<S: Store> {
-    store: S,
+pub struct SessionModel<'a, S: Store> {
+    store: &'a S,
     session: Session,
     duration: Duration,
 }
 
-impl<S: Store> SessionModel<S> {
-    pub fn new(store: S, duration: Duration) -> Self {
+impl<'a, S: Store> SessionModel<'a, S> {
+    pub fn new(store: &'a S, duration: Duration) -> Self {
         Self {
             store,
             duration,
@@ -22,7 +22,10 @@ impl<S: Store> SessionModel<S> {
         }
     }
 
-    pub async fn load(store: S, id: &SessionKey) -> Result<Option<Self>, S::Error> {
+    pub async fn load(
+        store: &'a S,
+        id: &SessionKey,
+    ) -> Result<Option<SessionModel<'a, S>>, S::Error> {
         let session = store.load(id).await?;
         let duration = store.ttl(id).await?;
         let model = session.map(|session| Self {
@@ -62,7 +65,7 @@ impl<S: Store> SessionModel<S> {
     }
 }
 
-impl<S: Store> Storage<&str> for SessionModel<S> {
+impl<'a, S: Store> Storage<&str> for SessionModel<'a, S> {
     type Error = StorageError;
 
     fn insert<T: Serialize>(&mut self, key: &str, value: &T) -> Result<(), Self::Error> {
@@ -78,8 +81,8 @@ impl<S: Store> Storage<&str> for SessionModel<S> {
     }
 }
 
-impl<S: Store> From<SessionModel<S>> for Session {
-    fn from(model: SessionModel<S>) -> Self {
+impl<'a, S: Store> From<SessionModel<'a, S>> for Session {
+    fn from(model: SessionModel<'a, S>) -> Self {
         model.session
     }
 }
@@ -87,7 +90,7 @@ impl<S: Store> From<SessionModel<S>> for Session {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{storage::Storage, RedisDatabase};
+    use crate::{redis_store::RedisDatabase, storage::Storage};
 
     #[tokio::test]
     async fn save_commits_new_sessions_to_the_store() {

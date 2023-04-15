@@ -12,7 +12,9 @@ use error::RedisError;
 use execute_command::ExecuteCommand;
 pub use redis_database::RedisDatabase;
 
-use crate::{session::Session, session_state::SessionState, SessionKey, Store};
+use crate::{
+    session::Session, session_state::SessionState, session_store::GenerateKey, SessionKey, Store,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -25,14 +27,14 @@ pub enum StoreError {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<T> Store for &T
+impl<T> Store for T
 where
-    T: Connect + ExecuteCommand,
+    T: Connect + ExecuteCommand + GenerateKey,
 {
     type Error = StoreError;
 
     async fn load(&self, session_key: &SessionKey) -> Result<Option<Session>, Self::Error> {
-        let cache_key = (self.config().key_gen())(session_key);
+        let cache_key = self.generate_key(session_key);
         let value = self
             .execute_command::<Option<String>>(Command::get(cache_key))
             .await
@@ -47,7 +49,7 @@ where
 
     async fn save(&self, session: &Session, timeout: Duration) -> Result<(), Self::Error> {
         let session_id = session.id();
-        let cache_key = (self.config().key_gen())(session_id);
+        let cache_key = self.generate_key(session_id);
         let state: SessionState = session.into();
         let body = serde_json::to_string(&state).map_err(StoreError::SerializationError)?;
         self.execute_command(Command::set(cache_key, body, timeout))
@@ -58,7 +60,7 @@ where
 
     async fn update(&self, session: &Session, timeout: Duration) -> Result<(), Self::Error> {
         let session_id = session.id();
-        let cache_key = (self.config().key_gen())(session_id);
+        let cache_key = self.generate_key(session_id);
         let state: SessionState = session.into();
         let body = serde_json::to_string(&state).map_err(StoreError::SerializationError)?;
         let value = self
@@ -78,14 +80,14 @@ where
     }
 
     async fn destroy(&self, session_key: &SessionKey) -> Result<(), Self::Error> {
-        let cache_key = (self.config().key_gen())(session_key);
+        let cache_key = self.generate_key(session_key);
         self.execute_command(Command::delete(cache_key))
             .await
             .map_err(StoreError::from)
     }
 
     async fn exists(&self, session_key: &SessionKey) -> Result<bool, Self::Error> {
-        let cache_key = (self.config().key_gen())(session_key);
+        let cache_key = self.generate_key(session_key);
         let exists = self
             .execute_command::<u64>(Command::exists(cache_key))
             .await
@@ -94,7 +96,7 @@ where
     }
 
     async fn ttl(&self, session_key: &SessionKey) -> Result<Duration, Self::Error> {
-        let cache_key = (self.config().key_gen())(session_key);
+        let cache_key = self.generate_key(session_key);
         let ttl = self
             .execute_command::<u64>(Command::ttl(cache_key))
             .await

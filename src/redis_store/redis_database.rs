@@ -4,17 +4,17 @@ use crate::{
     redis_store::{
         commands::Command, connect::Connect, error::RedisError, execute_command::ExecuteCommand,
     },
-    session_store::configuration::Configuration,
+    session_store::GenerateKey,
+    SessionKey,
 };
 
+#[derive(Clone)]
 pub struct RedisDatabase {
-    config: Configuration,
     connection: ConnectionManager,
 }
 
 impl RedisDatabase {
     pub async fn new(url: &str) -> Result<Self, RedisError> {
-        let config = Default::default();
         let client = redis::Client::open(url)
             .map_err(|e| e.to_string())
             .map_err(RedisError::ConnectionError)?;
@@ -22,7 +22,7 @@ impl RedisDatabase {
             .await
             .map_err(|e| e.to_string())
             .map_err(RedisError::ConnectionError)?;
-        Ok(Self { config, connection })
+        Ok(Self { connection })
     }
 }
 
@@ -33,10 +33,6 @@ impl AsRef<RedisDatabase> for RedisDatabase {
 }
 
 impl Connect for RedisDatabase {
-    fn config(&self) -> &Configuration {
-        &self.config
-    }
-
     fn connection(&self) -> &ConnectionManager {
         &self.connection
     }
@@ -58,11 +54,17 @@ impl ExecuteCommand for RedisDatabase {
     }
 }
 
+impl GenerateKey for RedisDatabase {
+    fn generate_key(&self, session_key: &SessionKey) -> String {
+        session_key.as_ref().to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
-    use super::*;
+    use super::RedisDatabase;
     use crate::{session::Session, storage::Storage, Store};
 
     #[tokio::test]
