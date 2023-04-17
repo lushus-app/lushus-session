@@ -1,9 +1,7 @@
 use redis::aio::ConnectionManager;
 
 use crate::{
-    redis_store::{
-        commands::Command, connect::Connect, error::RedisError, execute_command::ExecuteCommand,
-    },
+    redis_store::{commands::Command, error::RedisError, execute_command::ExecuteCommand},
     session_store::GenerateKey,
     SessionKey,
 };
@@ -29,12 +27,6 @@ impl RedisDatabase {
 impl AsRef<RedisDatabase> for RedisDatabase {
     fn as_ref(&self) -> &RedisDatabase {
         self
-    }
-}
-
-impl Connect for RedisDatabase {
-    fn connection(&self) -> &ConnectionManager {
-        &self.connection
     }
 }
 

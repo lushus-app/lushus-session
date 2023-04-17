@@ -1,5 +1,4 @@
 mod commands;
-mod connect;
 mod error;
 mod execute_command;
 mod redis_database;
@@ -7,7 +6,6 @@ mod redis_database;
 use std::time::Duration;
 
 use commands::Command;
-use connect::Connect;
 use error::RedisError;
 use execute_command::ExecuteCommand;
 pub use redis_database::RedisDatabase;
@@ -29,7 +27,7 @@ pub enum StoreError {
 #[async_trait::async_trait(?Send)]
 impl<T> Store for T
 where
-    T: Connect + ExecuteCommand + GenerateKey,
+    T: ExecuteCommand + GenerateKey,
 {
     type Error = StoreError;
 
