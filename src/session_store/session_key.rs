@@ -1,7 +1,15 @@
+use std::fmt::{Display, Formatter};
+
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SessionKey(String);
+
+impl Display for SessionKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl SessionKey {
     pub fn generate() -> Self {
