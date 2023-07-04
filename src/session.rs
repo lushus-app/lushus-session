@@ -1,19 +1,15 @@
-use std::borrow::{Borrow, BorrowMut};
-
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    session_state::SessionState,
-    storage::{Storage, StorageError, StorageGetError, StorageInsertError, StorageRemoveError},
-    SessionKey,
-};
+use crate::{session_state::SessionState, SessionKey};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
-    #[error(transparent)]
-    SessionStorageError(#[from] StorageError),
     #[error("Session is destroyed")]
     SessionDestroyedError,
+    #[error("Unable to serialize key \"{0}\" value {1}")]
+    SerializationError(String, String),
+    #[error("Unable to deserialize key \"{0}\" value {1}")]
+    DeserializationError(String, String),
 }
 
 #[derive(Default)]
@@ -34,6 +30,39 @@ impl Session {
     pub fn state(&self) -> &SessionState {
         &self.state
     }
+
+    pub fn insert<T: Serialize + DeserializeOwned>(
+        &mut self,
+        key: &str,
+        value: &T,
+    ) -> Result<Option<T>, SessionError> {
+        let insert = serde_json::to_string(value)
+            .map_err(|e| SessionError::SerializationError(key.to_string(), e.to_string()))?;
+        let previous = self
+            .state
+            .insert(key, insert)
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(|e| SessionError::DeserializationError(key.to_string(), e.to_string()));
+        previous
+    }
+
+    pub fn remove<T: DeserializeOwned>(&mut self, key: &str) -> Result<Option<T>, SessionError> {
+        self.state
+            .remove(key)
+            .map(|v| serde_json::from_str(&v))
+            .transpose()
+            .map_err(|e| SessionError::DeserializationError(key.to_string(), e.to_string()))
+    }
+
+    pub fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, SessionError> {
+        self.state
+            .get(key)
+            .map(|v| serde_json::from_str(v))
+            .transpose()
+            .map_err(|e| SessionError::DeserializationError(key.to_string(), e.to_string()))
+    }
 }
 
 impl From<Session> for SessionState {
@@ -45,38 +74,6 @@ impl From<Session> for SessionState {
 impl From<&Session> for SessionState {
     fn from(session: &Session) -> Self {
         session.state().clone()
-    }
-}
-
-impl Storage<&str> for Session {
-    type Error = StorageError;
-
-    fn insert<T: Serialize>(&mut self, key: &str, value: &T) -> Result<(), Self::Error> {
-        let insert = serde_json::to_string(value)
-            .map_err(|e| StorageInsertError::SerializeError(key.to_string(), e.to_string()))
-            .map_err(StorageError::from)?;
-        self.state.borrow_mut().insert(key, insert);
-        Ok(())
-    }
-
-    fn remove<T: DeserializeOwned>(&mut self, key: &str) -> Result<Option<T>, Self::Error> {
-        self.state
-            .borrow_mut()
-            .remove(key)
-            .map(|v| serde_json::from_str(&v))
-            .transpose()
-            .map_err(|e| StorageRemoveError::DeserializeError(key.to_string(), e.to_string()))
-            .map_err(StorageError::from)
-    }
-
-    fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Self::Error> {
-        self.state
-            .borrow()
-            .get(key)
-            .map(|v| serde_json::from_str(v))
-            .transpose()
-            .map_err(|e| StorageGetError::DeserializeError(key.to_string(), e.to_string()))
-            .map_err(StorageError::from)
     }
 }
 
