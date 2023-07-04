@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lushus_storage::storage::{StorageRead, StorageTemp, StorageWrite};
+use lushus_storage::{StorageRead, StorageTemp, StorageWrite};
 
 use crate::{session::Session, session_state::SessionState, SessionKey};
 
