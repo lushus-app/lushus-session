@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SessionKey(String);
 
 impl Display for SessionKey {

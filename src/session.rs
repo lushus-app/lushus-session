@@ -10,6 +10,8 @@ pub enum SessionError {
     SerializationError(String, String),
     #[error("Unable to deserialize key \"{0}\" value {1}")]
     DeserializationError(String, String),
+    #[error("Session is invalid: {0}")]
+    InvalidSessionError(String),
 }
 
 #[derive(Default)]

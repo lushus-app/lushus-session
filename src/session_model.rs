@@ -2,56 +2,28 @@ use std::time::Duration;
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{session_store::StoreError, Session, SessionError, SessionKey, SessionStore};
+use crate::{
+    session_storage::{SessionStorageError, SessionStorageRead, SessionStorageWrite},
+    Session, SessionError, SessionKey,
+};
 
-pub struct SessionModel<'a, S: SessionStore> {
-    store: &'a mut S,
+pub struct SessionModel<S> {
+    storage: S,
     session: Session,
     duration: Duration,
 }
 
-impl<'a, S: SessionStore> SessionModel<'a, S> {
-    pub fn new(store: &'a mut S, duration: Duration) -> Self {
+impl<S> SessionModel<S> {
+    pub fn new(storage: S, duration: Duration) -> Self {
         Self {
-            store,
+            storage,
             duration,
             session: Default::default(),
         }
     }
 
-    pub fn load(
-        store: &'a mut S,
-        id: &SessionKey,
-    ) -> Result<Option<SessionModel<'a, S>>, StoreError<S::Error>> {
-        let session = store.load(id)?;
-        let duration = store.ttl(id)?;
-        let model = session.map(|session| Self {
-            store,
-            session,
-            duration,
-        });
-        Ok(model)
-    }
-
     pub fn id(&self) -> &SessionKey {
         self.session.id()
-    }
-
-    pub fn save(&mut self) -> Result<(), StoreError<S::Error>> {
-        let id = self.session.id();
-        let exists = self.store.exists(id)?;
-        if exists {
-            self.store.update(&self.session)?;
-        } else {
-            self.store.save(&self.session)?;
-        }
-        Ok(())
-    }
-
-    pub fn destroy(&mut self) -> Result<(), StoreError<S::Error>> {
-        let id = self.session.id();
-        self.store.destroy(id)?;
-        Ok(())
     }
 
     pub fn session(&self) -> &Session {
@@ -65,9 +37,9 @@ impl<'a, S: SessionStore> SessionModel<'a, S> {
     pub fn insert<T: Serialize + DeserializeOwned>(
         &mut self,
         key: &str,
-        value: &T,
+        value: T,
     ) -> Result<Option<T>, SessionError> {
-        self.session.insert(key, value)
+        self.session.insert(key, &value)
     }
 
     pub fn remove<T: DeserializeOwned>(&mut self, key: &str) -> Result<Option<T>, SessionError> {
@@ -79,124 +51,161 @@ impl<'a, S: SessionStore> SessionModel<'a, S> {
     }
 }
 
-impl<'a, S: SessionStore> From<SessionModel<'a, S>> for Session {
-    fn from(model: SessionModel<'a, S>) -> Self {
+impl<S> SessionModel<S>
+where
+    S: SessionStorageRead,
+{
+    pub fn load(
+        storage: S,
+        id: &SessionKey,
+    ) -> Result<Option<Self>, SessionStorageError<S::Error>> {
+        let session = storage.session_load(id)?;
+        let duration = storage.session_ttl(id)?;
+        let model = session.map(|session| Self {
+            storage,
+            session,
+            duration,
+        });
+        Ok(model)
+    }
+}
+
+impl<S> SessionModel<S>
+where
+    S: SessionStorageWrite,
+{
+    pub fn save(&mut self) -> Result<(), SessionStorageError<S::Error>> {
+        self.storage.session_save(&mut self.session)?;
+        Ok(())
+    }
+
+    pub fn destroy(&mut self) -> Result<(), SessionStorageError<S::Error>> {
+        let id = self.session.id();
+        self.storage.session_destroy(id)?;
+        Ok(())
+    }
+}
+
+impl<S> From<SessionModel<S>> for Session {
+    fn from(model: SessionModel<S>) -> Self {
         model.session
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//
-//     #[tokio::test]
-//     async fn save_commits_new_sessions_to_the_store() {
-//         let store = RedisDatabase::new("redis://:password@localhost:6379/1")
-//             .expect("Unable to connect to Redis");
-//         let timeout = Duration::from_secs(1);
-//         let mut model = SessionModel::new(&store, timeout);
-//         model
-//             .insert("user_id", &"abc-123".to_string())
-//             .expect("Unable to insert user_id");
-//         model.save().expect("Unable to save session");
-//
-//         let loaded_session = store
-//             .as_ref()
-//             .load(model.id())
-//             .expect("Unable to load session")
-//             .expect("Unable to find saved session");
-//         let loaded_user_id = loaded_session
-//             .get::<String>("user_id")
-//             .expect("Unable to get from loaded session")
-//             .expect("Unable to find user_id in loaded session");
-//         assert_eq!(&loaded_user_id, "abc-123");
-//     }
-//
-//     #[tokio::test]
-//     async fn save_updates_existing_session_in_the_store() {
-//         let store = RedisDatabase::new("redis://:password@localhost:6379/1")
-//             .expect("Unable to connect to Redis");
-//         let timeout = Duration::from_secs(10);
-//         let mut model = SessionModel::new(&store, timeout);
-//
-//         model
-//             .insert("user_id", &"beavis".to_string())
-//             .expect("Unable to insert user_id");
-//         model.save().expect("Unable to save session");
-//
-//         let loaded_session = store
-//             .as_ref()
-//             .load(model.id())
-//             .expect("Unable to load session")
-//             .expect("Unable to find saved session");
-//         let loaded_user_id = loaded_session
-//             .get::<String>("user_id")
-//             .expect("Unable to get from loaded session")
-//             .expect("Unable to find user_id in loaded session");
-//         assert_eq!(&loaded_user_id, "beavis");
-//
-//         model
-//             .insert("user_id", &"butt-head".to_string())
-//             .expect("Unable to insert user_id");
-//         model.save().expect("Unable to save session");
-//
-//         let loaded_session = store
-//             .as_ref()
-//             .load(model.id())
-//             .expect("Unable to load session")
-//             .expect("Unable to find saved session");
-//         let loaded_user_id = loaded_session
-//             .get::<String>("user_id")
-//             .expect("Unable to get from loaded session")
-//             .expect("Unable to find user_id in loaded session");
-//         assert_eq!(&loaded_user_id, "butt-head");
-//     }
-//
-//     #[tokio::test]
-//     async fn load_creates_a_model_from_existing_session_in_the_store() {
-//         let store = RedisDatabase::new("redis://:password@localhost:6379/1")
-//             .expect("Unable to connect to Redis");
-//         let mut session = Session::default();
-//         session
-//             .insert("user_id", &"beavis".to_string())
-//             .expect("Unable to insert user_id");
-//         let timeout = Duration::from_secs(10);
-//         store
-//             .as_ref()
-//             .save(&session, timeout)
-//             .expect("Unable to save session");
-//
-//         let model = SessionModel::load(&store, session.id())
-//             .expect("Unable to load session")
-//             .expect("Unable to find saved session");
-//         let user_id = model
-//             .get::<String>("user_id")
-//             .expect("Unable to get from loaded session")
-//             .expect("Unable to find user_id in loaded session");
-//         assert_eq!(&user_id, "beavis");
-//     }
-//
-//     #[tokio::test]
-//     async fn destroy_deletes_the_session_to_the_store() {
-//         let store = RedisDatabase::new("redis://:password@localhost:6379/1")
-//             .expect("Unable to connect to Redis");
-//         let timeout = Duration::from_secs(1);
-//         let mut model = SessionModel::new(&store, timeout);
-//         model
-//             .insert("user_id", &"abc-123".to_string())
-//             .expect("Unable to insert user_id");
-//         model.save().expect("Unable to save session");
-//         let exists = store
-//             .as_ref()
-//             .exists(model.id())
-//             .expect("Unable to check exists");
-//         assert!(exists);
-//
-//         model.destroy().expect("Unable to destroy session");
-//         let exists = store
-//             .as_ref()
-//             .exists(model.id())
-//             .expect("Unable to check exists");
-//         assert!(!exists);
-//     }
-// }
+#[cfg(test)]
+mod test {
+    use std::{borrow::Cow, collections::HashMap, time::Duration};
+
+    use lushus_storage::{Storage, StorageRead, StorageTemp, StorageWrite};
+
+    use crate::{
+        session_state::SessionState, session_storage::SessionStateTable, SessionKey, SessionModel,
+    };
+
+    struct TestStorage {
+        map: HashMap<SessionKey, SessionState>,
+    }
+
+    impl TestStorage {
+        fn new() -> Self {
+            let map = HashMap::new();
+            TestStorage { map }
+        }
+    }
+
+    impl Storage for TestStorage {
+        type Error = std::convert::Infallible;
+    }
+
+    impl StorageRead<SessionStateTable> for TestStorage {
+        fn get(&self, key: &SessionKey) -> Result<Option<Cow<'_, SessionState>>, Self::Error> {
+            let result = self.map.get(key);
+            let value = result.map(Cow::Borrowed);
+            Ok(value)
+        }
+
+        fn exists(&self, key: &SessionKey) -> Result<bool, Self::Error> {
+            let result = self.map.get(key);
+            Ok(result.is_some())
+        }
+    }
+
+    impl StorageWrite<SessionStateTable> for TestStorage {
+        fn insert(
+            &mut self,
+            key: &SessionKey,
+            value: &SessionState,
+        ) -> Result<Option<SessionState>, Self::Error> {
+            let previous = self.map.insert(key.clone(), value.clone());
+            Ok(previous)
+        }
+
+        fn remove(&mut self, key: &SessionKey) -> Result<Option<SessionState>, Self::Error> {
+            let previous = self.map.remove(key);
+            Ok(previous)
+        }
+    }
+
+    impl StorageTemp<SessionStateTable> for TestStorage {
+        fn ttl(&self, _key: &SessionKey) -> Result<Duration, Self::Error> {
+            Ok(Duration::from_secs(100))
+        }
+    }
+
+    #[test]
+    fn save_inserts_the_session() {
+        let mut storage = TestStorage::new();
+
+        let mut model = SessionModel::new(&mut storage, Duration::from_secs(100));
+        model
+            .insert::<String>("id", "abc".to_string())
+            .expect("failed to write to session model");
+        model.save().expect("Failed to save session model");
+        let key = model.id().clone();
+
+        let state = storage
+            .get(&key)
+            .expect("Failed to retrieve state from storage")
+            .expect("Expected state to be present");
+        let id = state.get("id").expect("Expected id to be present");
+        assert_eq!(id, "\"abc\"");
+    }
+
+    #[test]
+    fn load_retrieves_the_session() {
+        let mut storage = TestStorage::new();
+        let mut model = SessionModel::new(&mut storage, Duration::from_secs(100));
+        model
+            .insert::<String>("id", "abc".to_string())
+            .expect("Failed write to session model");
+        model.save().expect("Failed to save session model");
+        let id = model.id().clone();
+
+        let model = SessionModel::load(&mut storage, &id)
+            .expect("Failed to load session model")
+            .expect("Expected session model to be present");
+
+        let id = model
+            .get::<String>("id")
+            .expect("Failed to read from session model")
+            .expect("Expected id to be present");
+        assert_eq!(id, "abc".to_string())
+    }
+
+    #[test]
+    fn delete_removes_the_session() {
+        let mut storage = TestStorage::new();
+        let key = SessionKey::generate();
+        let mut state = SessionState::default();
+        state.insert("id", "abc".to_string());
+        storage
+            .insert(&key, &state)
+            .expect("Failed to insert session state");
+
+        storage
+            .remove(&key)
+            .expect("Failed to remove session state");
+        let retrieved = storage.get(&key).expect("Failed to get session state");
+        assert!(retrieved.is_none())
+    }
+}
